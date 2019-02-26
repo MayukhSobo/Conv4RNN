@@ -3,7 +3,12 @@ class TextReader:
     def __init__(self, data_dir, suffix_labels):
         self.path = data_dir
         self.ranks = None
+        self.raw_labeled_data = defaultdict(list)
+        self.word_fequency = None
+        self.max_text_length = 0
         self.data_files = {}
+        self.X = None
+        self.y = None
         for file, label in suffix_labels.items():
             if not os.path.exists(os.path.join(data_dir, file)) or not \
             os.path.isfile(os.path.join(data_dir, file)):
@@ -20,9 +25,7 @@ class TextReader:
         return text.strip().lower()
     
     def prepare_data(self, clean=True, **kwargs):
-        max_sent_len = 0
         all_words = []
-        labeled_data = defaultdict(list)
         for file_path, class_label in self.data_files.items():
             lines = []
             with open(file_path, 'r', encoding='latin-1') as infile:
@@ -35,27 +38,39 @@ class TextReader:
 
                     lines.append(cleaned_line)
                     tokens = cleaned_line.split()
-                    max_sent_len = max(max_sent_len, len(tokens))
+                    self.max_text_length = max(self.max_text_length, len(tokens))
                     all_words.extend(tokens)
-                    labeled_data[class_label].append(cleaned_line)
-        TextReader.store_ranking(Counter(all_words), self.path)
-        return labeled_data, max_sent_len
+                    self.raw_labeled_data[class_label].append(cleaned_line)
+        
+        self.word_fequency = Counter(all_words)
+        return self.store_ranking(kwargs.get('max_vocab'))
     
-    @staticmethod
-    def store_ranking(wordFreq, path, max_vocab=None):
-        ranks = [*map(lambda x: x[0], wfreq.most_common(max_vocab))]
-        np.save(os.path.join(path, 'ranks'), ranks)
+    def store_ranking(self, max_vocab=None):
+        ranks = [*map(lambda x: x[0], self.word_fequency.most_common(max_vocab))]
+        np.save(os.path.join(self.path, 'ranks'), ranks)
         return True
     
     def get_rank(self, token):
         if self.ranks is None:
             self.ranks = np.load(os.path.join(self.path, 'ranks.npy'))
         try:
-            return np.where(self.ranks == token)[0][0]
+            return int(np.where(self.ranks == token)[0][0]) + 1
         except IndexError:
-            raise KeyError(f"Token '{token}' is not found")
+            return 0
             
-        
-    
-    def get_statistics(self):
-        print(f'Total number of datapoints: {len(self)}')
+    def get_ranked_features(self):
+        if self.X is not None and self.y is not None:
+            return self.X, self.y
+        X = []
+        y = []
+        for label, corpus in self.raw_labeled_data.items():
+            for doc in tqdm(corpus):
+                tokens = doc.split()
+                ranks = [self.get_rank(token) for token in tokens]
+                pad_left = (self.max_text_length - len(tokens)) // 2
+                pad_right = int(np.ceil((self.max_text_length - len(tokens)) / 2.0))
+                ranks = np.pad(ranks, pad_width=(pad_left, pad_right), 
+                               mode='constant', constant_values=(-1, -1))
+                y.append(label)
+                X.append(ranks)
+        return np.array(X, dtype=int), np.array(y, dtype=int)

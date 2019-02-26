@@ -1,9 +1,3 @@
-import numpy as np
-import os
-from collections import defaultdict, Counter
-import re
-from nltk.tokenize import word_tokenize
-
 class TextReader:
     
     def __init__(self, data_dir, suffix_labels):
@@ -55,8 +49,11 @@ class TextReader:
     
     def get_rank(self, token):
         if self.ranks is None:
-            self.ranks = np.load('./data/mr/ranks.npy')
-        return np.where(self.ranks == token)[0][0]
+            self.ranks = np.load(os.path.join(self.path, 'ranks.npy'))
+        try:
+            return np.where(self.ranks == token)[0][0]
+        except IndexError:
+            raise KeyError(f"Token '{token}' is not found")
             
         
     

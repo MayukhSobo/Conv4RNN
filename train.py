@@ -3,8 +3,6 @@ import os
 import numpy as np
 from tqdm import tqdm
 
-class 
-
 class CNNText(BatchIterator):
     
     def __init__(self, train_path, valid_path, epochs, batch_size, **kwargs):

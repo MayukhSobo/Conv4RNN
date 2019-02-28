@@ -44,12 +44,21 @@ class CNNText(BatchIterator):
         
         ## 
     
-    def train(self, device='cuda'):
+    @staticmethod
+    def _train_tf(self):
+        pass
+    
+    
+    def train(self, backend='tensorflow'):
         for epoch in range(1, self.epochs+1):
             all_batches = tqdm(range(self.batches), ascii=True, desc=f'Epoch {epoch}')
             for i in all_batches:
+                xs, ys = self.next_train_batch()
+                # Here do the fitting of training data
+                
+                # Then calculate the train and validation loss
                 all_batches.set_postfix({
                     "train_loss": 0.1 * (epoch + i),
                     "valid_loss": 0.1 * (epoch + i)
                 })
-                xs, ys = self.next_train_batch()
+                

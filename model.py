@@ -23,6 +23,8 @@ class Model:
         if self.is_train:
             self.optimizer = kwargs.get('optim', 'adam')
             self.dropout_rate = kwargs.get('dropout', 0.5)
+        
+        self.device = kwargs.get('device', 'cuda')
 
         self._build_graph()
 
@@ -57,11 +59,11 @@ class Model:
             ## The reason to convert this single ranks to weight vector is to facilitate
             ## learning sematics between the words. With single value it would be difficult.
             ## In case of LSTMs also, we perform this embeddings.
-            self._Wemb = Model._variable_on_cpu(
+            self._Wemb = Model._variable_on_device(
                 name='embed',
                 shape=[self.vocab_size, self.emb_size],
-                initializer=tf.random_uniform_initializer(minval=-1.0, maxval=1.0)
-            )
+                initializer=tf.random_uniform_initializer(minval=-1.0, maxval=1.0),
+                device=self.device)
             ## This is basically looking/performing the actual embeddings on batch data
             batch_emb = tf.nn.embedding_lookup(params=self._Wemb, ids=self._input)
             # Because it need to be 4-dimensional as CNN requires 4d inputs
@@ -87,7 +89,7 @@ class Model:
                     # Kernel size is always 4-d like input.
                     shape=[ks, self.emb_size, 1, self.num_kernel],
                     initializer=tf.truncated_normal_initializer(stddev=0.01),
-                    reg_alpha=self.l2_reg)
+                    reg_alpha=self.l2_reg, device=self.device)
                 regularization_loss.append(reg_loss)
 
                 # Create the conv layers wiht kernel weights
@@ -96,11 +98,11 @@ class Model:
 
                 # Create the bias for each conv units. There were 100 feature maps or conv units
                 # hence we would have 100 bias terms.
-                bias = Model._variable_on_cpu(
+                bias = Model._variable_on_device(
                     name=f'bias_{ks}',
                     # `self.num_kernel` = 100
                     shape=[self.num_kernel],
-                    initializer=tf.constant_initializer(0.0))
+                    initializer=tf.constant_initializer(0.0), device=self.device)
 
                 # Now add all the conv units and their bias values
                 c = tf.nn.bias_add(conv, bias)
@@ -160,14 +162,16 @@ class Model:
             fc, fc_reg_loss = Model._variable_with_weight_decay(
                 name='dense',
                 shape=[fc_size, self.num_class],
-                initializer=tf.truncated_normal_initializer(stddev=0.05), reg_alpha=self.l2_reg)
+                initializer=tf.truncated_normal_initializer(stddev=0.05), 
+                reg_alpha=self.l2_reg,
+                device=self.device)
             regularization_loss.append(fc_reg_loss)
 
             ## Add bias
-            bias = Model._variable_on_cpu(
+            bias = Model._variable_on_device(
                 'fc_bias',
                 [self.num_class],
-                tf.constant_initializer(0.01))
+                tf.constant_initializer(0.01), self.device)
 
             output = tf.nn.bias_add(tf.matmul(d, fc), bias)
 
@@ -216,30 +220,39 @@ class Model:
         return True
 
     @staticmethod
-    def _variable_with_weight_decay(name, shape, initializer, reg_alpha):
+    def _variable_with_weight_decay(name, shape, initializer, reg_alpha, device):
         """
         It returns two variables.
         1. A simple weight vector on CPU.
         2. A variable which is used for regularization parameter
         """
-        w = Model._variable_on_cpu(name, shape, initializer)
-        # If we want to use any regularisation for kernel weights
-        if reg_alpha > 0.0:
-            # This is l2 regularisation with hyperparam reg_alpha.
-            reg_loss = tf.multiply(tf.nn.l2_loss(w), reg_alpha, name='reg_loss')
-        # If we don't want to regularize the the CNN kernel weights
+        w = Model._variable_on_device(name, shape, initializer, device)
+        if device == 'cuda':
+            d = '/gpu:0'
         else:
-            reg_loss = tf.constant(0.0, dtype=tf.float32)
+            d = '/cpu:0'
+        with tf.device(d):
+            # If we want to use any regularisation for kernel weights
+            if reg_alpha > 0.0:
+                # This is l2 regularisation with hyperparam reg_alpha.
+                reg_loss = tf.multiply(tf.nn.l2_loss(w), reg_alpha, name='reg_loss')
+            # If we don't want to regularize the the CNN kernel weights
+            else:
+                reg_loss = tf.constant(0.0, dtype=tf.float32)
 
         return w, reg_loss
 
     @staticmethod
-    def _variable_on_cpu(name, shape, initializer):
+    def _variable_on_device(name, shape, initializer, device='cuda'):
         """
         Declare a variable on CPU of `shape` and initialize
         those with the `initializer`.
         """
-        with tf.device('/cpu:0'):
+        if device == 'cuda':
+            d = '/gpu:0'
+        else:
+            d = '/cpu:0'
+        with tf.device(d):
             var = tf.get_variable(name, shape, initializer=initializer)
         return var
 

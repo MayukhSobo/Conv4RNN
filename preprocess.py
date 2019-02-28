@@ -1,5 +1,4 @@
 import numpy as np
-# import tensorflow as tf
 import os
 from collections import defaultdict, Counter
 import re
@@ -97,7 +96,7 @@ class TextReader:
     
     def get_embedding_vector(self, model):
         """
-        Get the embedding vector from the model.
+        Get the embedding vector from the Gensim model.
         We can use pretrained word vectors like Google News.
         """
         for word in self.word_fequency:

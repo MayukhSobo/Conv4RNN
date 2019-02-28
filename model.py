@@ -64,9 +64,12 @@ class Model:
             )
             ## This is basically looking/performing the actual embeddings on batch data
             batch_emb = tf.nn.embedding_lookup(params=self._Wemb, ids=self._input)
-            batch_emb = tf.expand_dims(batch_emb, -1)  # Because it need to be 4-dimensional as CNN requires 4d inputs
-            # These 4-d inputs are N x H x W x C. The actual input was only a rank/id vector each of size `self.sent_len`
-            # and the dataset would have been N x self.sent_len. Embedding and expand dims are to get 4-d data. `batch_emb`
+            # Because it need to be 4-dimensional as CNN requires 4d inputs
+            batch_emb = tf.expand_dims(batch_emb, -1) 
+            # These 4-d inputs are N x H x W x C. 
+            # The actual input was only a rank/id vector each of size `self.sent_len`
+            # and the dataset would have been N x self.sent_len. 
+            # Embedding and expand dims are to get 4-d data. `batch_emb`
             # hence would go directly into the conv layer.
 
         ### ------------------ Add Conv units with maxpool layers ------------------------ ##
@@ -106,7 +109,8 @@ class Model:
                 # This is the output from one conv layer
                 c_activated = tf.nn.relu(c, name='activation')
 
-                # At the end of ReLu, the shape of the output would be [batch_size x conv_len x 1 x conv_units]
+                # At the end of ReLu, the shape of the 
+                # output would be [batch_size x conv_len x 1 x conv_units]
                 # In this case it would be [50 x ? x 1 x 100]
                 # conv_len -> After applyting the filter with strides 1x1 and padding on input
 
@@ -168,11 +172,13 @@ class Model:
             output = tf.nn.bias_add(tf.matmul(d, fc), bias)
 
         ### ------------------ Configure Loss and learning rate with optimizers ------------------------ ##
-        # This SO post https://stackoverflow.com/questions/35241251/in-tensorflow-what-is-the-difference-between-sampled-softmax-loss-and-softmax-c
-        # it makes sense not to use `sampled_softmax_loss` in fovour of `softmax_cross_entropy_with_logits` because
+        # This SO post https://bit.ly/2TmR3Vc
+        # it makes sense not to use `sampled_softmax_loss` in 
+        # fovour of `softmax_cross_entropy_with_logits` because
         # we have only 2 class labels
-        # Also we are not using One-hot-encoded version of the class label because our self._labels is of size (N, ) and type int32
-        # More detail here https://stackoverflow.com/questions/37312421/whats-the-difference-between-sparse-softmax-cross-entropy-with-logits-and-softm
+        # Also we are not using One-hot-encoded version of the class label 
+        # because our self._labels is of size (N, ) and type int32
+        # More detail here https://bit.ly/2BZ4wsr
         cross_entropy_loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=self._labels,
@@ -186,7 +192,28 @@ class Model:
         correct_prediction = tf.to_int32(tf.nn.in_top_k(output, self._labels, 1))
         self._true_predictions = tf.reduce_sum(correct_prediction)
 
-        pass
+        ### ------------------ Tune learning rate and Optimization algorithm ------------------------ ##
+
+        # This stage would only run during the training phase
+        self._learning_rate = tf.Variable(0.0, trainable=False)
+        if self.is_train:
+            if self.optimizer == 'adadelta':
+                algo = tf.train.AdadeltaOptimizer(self._learning_rate)
+            elif self.optimizer == 'adagrad':
+                algo = tf.train.AdagradOptimizer(self._learning_rate)
+            elif self.optimizer == 'adam':
+                algo = tf.train.AdamOptimizer(self._learning_rate)
+            else:
+                raise NotImplementedError(f'Algo {algo} is not implemented yet')
+
+            # This calculates the gradient and applies then with the previous
+            # gradient values. If we need need to avoid exploding gradient,
+            # we may need to split this section and manually apply the clipping
+            # the compelte thing is mentioned https://www.tensorflow.org/api_docs/python/tf/train/Optimizer
+            self._train_op = algo.minimize(self._total_loss)
+        else:
+            self._train_op = tf.no_op()
+        return True
 
     @staticmethod
     def _variable_with_weight_decay(name, shape, initializer, reg_alpha):
@@ -216,7 +243,10 @@ class Model:
             var = tf.get_variable(name, shape, initializer=initializer)
         return var
 
-
+    @property
+    def train_op(self):
+        return self._train_op
+    
 if __name__ == '__main__':
     m = Model(
         nkernels=100,
@@ -227,4 +257,4 @@ if __name__ == '__main__':
         max_len=51,
         l2_reg=1,
     )
-    print(m)
+    print(m.train_op)

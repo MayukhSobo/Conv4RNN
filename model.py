@@ -2,7 +2,34 @@ import tensorflow as tf
 
 
 class Model:
+    """
+    This defines a tensorFLow computaion graph mostly
+    keeping the details intact in the research paper.
+    
+    Conv Max pool 1
+    ---------  ---------
+    |       |  |       |
+    | conv  |__|  max  | 
+    | 3 x 3 |  |  pool |
+    |  100  |  |       |
+    ---------  ---------
+    
+    Conv Max pool 2
+    ---------  ---------
+    |       |  |       |
+    | conv  |__|  max  | 
+    | 4 x 4 |  |  pool |
+    |  100  |  |       |
+    ---------  ---------  
 
+     Conv Max pool 3
+    ---------  ---------
+    |       |  |       |
+    | conv  |__|  max  | 
+    | 5 x 5 |  |  pool |
+    |  100  |  |       |
+    ---------  ---------  
+    """
     def __init__(self, nkernels, min_filter, max_filter,
                  vocab_size, num_class, max_len, l2_reg,
                  subset='train', esize=300, bsize=50, **kwargs):
@@ -269,5 +296,6 @@ if __name__ == '__main__':
         num_class=2,
         max_len=51,
         l2_reg=1,
+        device='cpu'
     )
     print(m.train_op)

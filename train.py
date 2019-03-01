@@ -3,6 +3,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 from model import Model
+import tensorflow as tf
 
 class CNNText(BatchIterator):
     
@@ -46,10 +47,17 @@ class CNNText(BatchIterator):
         ## 
     
     @staticmethod
-    def _train_tf(self, logdir):
-        import tensorflow as tf
-        
-        with tf.Graph().as_default(): # In the scope of tf session
+    def _train_tf(self, logdir, tolerance):
+        pass
+    
+    def train(self, tolerance, logdir, backend='tensorflow'):
+        """
+        1. Load the the batch from training data
+        2. At every 20th step get the batch from validation data
+        3. Pass the validation data for loss calculations
+        4. Keep reporting the training and validation loss
+        """
+        with tf.Graph().as_default(): # In the scope of a tf session with default values
             
             # Create the computation graph for training
             with tf.variable_scope('cnn', reuse=None):
@@ -89,35 +97,34 @@ class CNNText(BatchIterator):
             # Create a session with some default config values
             # and `log_device_placement`= False for not to log
             # the device/GPU/CPU info.
-            sess = tf.Session(
-                config=tf.ConfigProto(
-                    log_device_placement=False
-                )
-            )
+            with tf.Session(config=tf.ConfigProto(log_device_placement=False)) as sess:
+                # Create a summary writter for the session variables
+                summary_writer = tf.summary.FileWriter(
+                    logdir,
+                    graph=sess.graph)
 
-            # Create a summary writter for the session variables
-            summary_writer = tf.summary.FileWriter(
-                logdir,
-                graph=sess.graph)
+                # Initialize the global variables in computation Graph
+                # Whenever we need to perform someting on computaion graph,
+                # we need to use session varible and use `run` method in the
+                # session variable.
+                sess.run(tf.global_variables_initializer())
 
-            sess.run(tf.global_variables_initializer())
-    
-    def train(self, backend='tensorflow'):
-        for epoch in range(1, self.epochs+1):
-            all_batches = tqdm(range(self.batches), ascii=True, desc=f'Epoch {epoch}')
-            for i in all_batches:
-                xs, ys = self.next_train_batch()
-                # Here do the fitting of training data
-                
-                # Then calculate the train and validation loss
-                all_batches.set_postfix({
-                    "train_loss": 0.1 * (epoch + i),
-                    "valid_loss": 0.1 * (epoch + i)
-                })
+                for epoch in range(1, self.epochs+1):
+                    all_batches = tqdm(range(self.batches), ascii=True, desc=f'Epoch {epoch}')
+                    for i in all_batches:
+                        # Load the the batch from training data
+                        xs, ys = self.next_train_batch()
+                        # Pass the data for fitting
+                        
+                        # At every 20th step get the batch from validation data
 
+                        # Pass the data for loss calculations
 
-
-
+                        # Keep reporting the training and validation loss
+                        all_batches.set_postfix({
+                            "train_loss": 0.1 * (epoch + i),
+                            "valid_loss": 0.1 * (epoch + i)
+                        })
 
 
 

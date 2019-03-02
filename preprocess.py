@@ -32,27 +32,27 @@ class TextReader:
             else:
                 self.data_files[os.path.join(data_dir, file)] = label
     
-    def clean_text(self, string, stopwords):
+    def clean_text(self, text, stopwords):
         """
         Cleaning the text
         """
-        string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)     
-        string = re.sub(r"\'s", " \'s", string) 
-        string = re.sub(r"\'ve", " \'ve", string) 
-        string = re.sub(r"n\'t", " n\'t", string) 
-        string = re.sub(r"\'re", " \'re", string) 
-        string = re.sub(r"\'d", " \'d", string) 
-        string = re.sub(r"\'ll", " \'ll", string) 
-        string = re.sub(r",", " , ", string) 
-        string = re.sub(r"!", " ! ", string) 
-        string = re.sub(r"\(", " \( ", string) 
-        string = re.sub(r"\)", " \) ", string) 
-        string = re.sub(r"\?", " \? ", string) 
-        string = re.sub(r"\s{2,}", " ", string)
-        # text = " ".join(filter(lambda x: all([x.isalpha(), x not in stopwords]), 
-        #                        word_tokenize(text)))
-        # return text.strip().lower()
-        return string.strip().lower()
+        # text = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", text)     
+        # text = re.sub(r"\'s", " \'s", text) 
+        # text = re.sub(r"\'ve", " \'ve", text) 
+        # text = re.sub(r"n\'t", " n\'t", text) 
+        # text = re.sub(r"\'re", " \'re", text) 
+        # text = re.sub(r"\'d", " \'d", text) 
+        # text = re.sub(r"\'ll", " \'ll", text) 
+        # text = re.sub(r",", " , ", text) 
+        # text = re.sub(r"!", " ! ", text) 
+        # text = re.sub(r"\(", " \( ", text) 
+        # text = re.sub(r"\)", " \) ", text) 
+        # text = re.sub(r"\?", " \? ", text) 
+        # text = re.sub(r"\s{2,}", " ", text)
+        text = " ".join(filter(lambda x: all([x.isalpha(), x not in stopwords]), 
+                               word_tokenize(text)))
+        return text.strip().lower()
+        # return string.strip().lower()
     
     def prepare_data(self, clean=True, **kwargs):
         all_words = []
@@ -70,7 +70,7 @@ class TextReader:
                     tokens = cleaned_line.split()
                     self.max_text_length = max(self.max_text_length, len(tokens))
                     all_words.extend(tokens)
-                    self.raw_labeled_data[class_label].append(cleaned_line)
+                    self.raw_labeled_data[(file_path, class_label)].append(cleaned_line)
         
         self.word_fequency = Counter(all_words)
         return self.store_ranking(kwargs.get('max_vocab'))
@@ -82,6 +82,7 @@ class TextReader:
 #         if not os.path.exists(os.path.join(self.path, 'data')):
 #             os.makedirs(directory)
         joblib.dump(ranks, os.path.join(self.path, 'ranks'))
+        print(f'Created token ranks {os.path.join(self.path, "ranks")} of size {len(ranks)}')
         # np.save(os.path.join(self.path, 'ranks'), ranks)
         return True
     
@@ -98,8 +99,11 @@ class TextReader:
             return self.X, self.y
         X = []
         y = []
-        for label, corpus in self.raw_labeled_data.items():
-            for doc in tqdm(corpus):
+        all_data = tqdm(self.raw_labeled_data.items())
+        for path_label, corpus in all_data:
+            path, label = path_label
+            all_data.set_description_str(desc=f"Processing: {path}", refresh=True)
+            for doc in corpus:
                 tokens = doc.split()
                 ranks = [self.get_rank(token) for token in tokens]
                 pad_left = (self.max_text_length - len(tokens)) // 2

@@ -1,5 +1,39 @@
 import tensorflow as tf
 
+def _variable_on_device(name, shape, initializer, device='cuda'):
+        """
+        Declare a variable on CPU of `shape` and initialize
+        those with the `initializer`.
+        """
+        if device == 'cuda':
+            d = '/gpu:0'
+        else:
+            d = '/cpu:0'
+        with tf.device(d):
+            var = tf.get_variable(name, shape, initializer=initializer)
+        return var
+
+def _variable_with_weight_decay(name, shape, initializer, reg_alpha, device):
+        """
+        It returns two variables.
+        1. A simple weight vector on CPU.
+        2. A variable which is used for regularization parameter
+        """
+        w = _variable_on_device(name, shape, initializer, device)
+        if device == 'cuda':
+            d = '/gpu:0'
+        else:
+            d = '/cpu:0'
+        with tf.device(d):
+            # If we want to use any regularisation for kernel weights
+            if reg_alpha > 0.0:
+                # This is l2 regularisation with hyperparam reg_alpha.
+                reg_loss = tf.multiply(tf.nn.l2_loss(w), reg_alpha, name='weight_loss')
+            # If we don't want to regularize the the CNN kernel weights
+            else:
+                reg_loss = tf.constant(0.0, dtype=tf.float32)
+
+        return w, reg_loss
 
 class Model:
     """
@@ -48,7 +82,7 @@ class Model:
         self.dropout_rate = 0
 
         if self.is_train:
-            self.optimizer = kwargs.get('optim', 'adam')
+            self.optimizer = kwargs.get('optim', 'adagrad')
             self.dropout_rate = kwargs.get('dropout', 0.5)
         
         self.device = kwargs.get('device', 'cuda')
@@ -69,7 +103,7 @@ class Model:
         ### ------------------ Create the I/O placeholders ------------------------ ##
         # Input contains a matrix of batch_size X max_sent_len
         # This is a vector or padded rank vectors for each review for each data points
-        self._input = tf.placeholder(dtype=tf.int64, shape=[self.batch_size, self.sent_len], name='input_x')
+        self._inputs = tf.placeholder(dtype=tf.int64, shape=[self.batch_size, self.sent_len], name='input_x')
         # Output should contain predictions for each batch inputs, not one hot encoded yet.
         self._labels = tf.placeholder(dtype=tf.int64, shape=[self.batch_size], name='input_y')
         # This is a placeholder for regularisation losses for each layers in convNet.
@@ -86,13 +120,13 @@ class Model:
             ## The reason to convert this single ranks to weight vector is to facilitate
             ## learning sematics between the words. With single value it would be difficult.
             ## In case of LSTMs also, we perform this embeddings.
-            self._Wemb = Model._variable_on_device(
-                name='embed',
+            self._Wemb = _variable_on_device(
+                name='embedding',
                 shape=[self.vocab_size, self.emb_size],
                 initializer=tf.random_uniform_initializer(minval=-1.0, maxval=1.0),
                 device=self.device)
             ## This is basically looking/performing the actual embeddings on batch data
-            batch_emb = tf.nn.embedding_lookup(params=self._Wemb, ids=self._input)
+            batch_emb = tf.nn.embedding_lookup(params=self._Wemb, ids=self._inputs)
             # Because it need to be 4-dimensional as CNN requires 4d inputs
             batch_emb = tf.expand_dims(batch_emb, -1) 
             # These 4-d inputs are N x H x W x C. 
@@ -111,7 +145,7 @@ class Model:
             # 3, 4 and 5 with kernel sizes. Which means there would 3 layers of convolution and maxpool
             for ks in range(self.min_filter, self.max_filter + 1):
                 # Initialize the kernel weights and reg_loss
-                kernel, reg_loss = Model._variable_with_weight_decay(
+                kernel, reg_loss = _variable_with_weight_decay(
                     name=f'kernel_{ks}',
                     # Kernel size is always 4-d like input.
                     shape=[ks, self.emb_size, 1, self.num_kernel],
@@ -125,7 +159,7 @@ class Model:
 
                 # Create the bias for each conv units. There were 100 feature maps or conv units
                 # hence we would have 100 bias terms.
-                bias = Model._variable_on_device(
+                bias = _variable_on_device(
                     name=f'bias_{ks}',
                     # `self.num_kernel` = 100
                     shape=[self.num_kernel],
@@ -162,7 +196,7 @@ class Model:
                     strides=[1, 1, 1, 1], padding='VALID')
                 # Convert into 2d as mentioned above
                 # Squeezing the 1st and 2nd dim and keeping 0th and 3rd dim
-                c_activated_max_pooled_2d = tf.squeeze(c_activated_max_pooled, axis=[1, 2])
+                c_activated_max_pooled_2d = tf.squeeze(c_activated_max_pooled, squeeze_dims=[1, 2])
 
                 # Now strore the Conv-maxpool layer
                 conv_layers.append(c_activated_max_pooled_2d)
@@ -174,7 +208,7 @@ class Model:
         ### ------------------ Add Dropout if required ------------------------ ##
         # As per the research paper, they use a dropout rate of 0.5... But we shall add
         # dropout only during training
-        if self.is_train:
+        if self.is_train and self.dropout_rate > 0:
             d = tf.nn.dropout(c_all, 1 - self.dropout_rate)
         else:
             d = c_all
@@ -186,8 +220,8 @@ class Model:
         # It's a sigmoid layer
         fc_size = (self.max_filter - self.min_filter + 1) * self.num_kernel
         with tf.variable_scope('dense'):
-            fc, fc_reg_loss = Model._variable_with_weight_decay(
-                name='dense',
+            fc, fc_reg_loss = _variable_with_weight_decay(
+                name='fc',
                 shape=[fc_size, self.num_class],
                 initializer=tf.truncated_normal_initializer(stddev=0.05), 
                 reg_alpha=self.l2_reg,
@@ -195,12 +229,12 @@ class Model:
             regularization_loss.append(fc_reg_loss)
 
             ## Add bias
-            bias = Model._variable_on_device(
+            bias_fc = _variable_on_device(
                 'fc_bias',
                 [self.num_class],
                 tf.constant_initializer(0.01), self.device)
 
-            output = tf.nn.bias_add(tf.matmul(d, fc), bias)
+            output = tf.nn.bias_add(tf.matmul(d, fc), bias_fc)
 
         ### ------------------ Configure Loss and learning rate with optimizers ------------------------ ##
         # This SO post https://bit.ly/2TmR3Vc
@@ -213,15 +247,15 @@ class Model:
         cross_entropy_loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=self._labels,
-                logits=output, name='softmax'),
-            name='output_loss')
+                logits=output, name='cross_entropy_per_example'),
+            name='cross_entropy_loss')
         regularization_loss.append(cross_entropy_loss)
         self._total_loss = tf.add_n(regularization_loss, name='total_loss')
 
         ### ------------------ Calculate number of correct predictions ------------------------ ##
 
         correct_prediction = tf.to_int32(tf.nn.in_top_k(output, self._labels, 1))
-        self._true_predictions = tf.reduce_sum(correct_prediction)
+        self._true_count_op = tf.reduce_sum(correct_prediction)
 
         ### ------------------ Tune learning rate and Optimization algorithm ------------------------ ##
 
@@ -242,50 +276,44 @@ class Model:
             # we may need to split this section and manually apply the clipping
             # the compelte thing is mentioned https://www.tensorflow.org/api_docs/python/tf/train/Optimizer
             self._train_op = algo.minimize(self._total_loss)
+            for var in tf.trainable_variables():
+                tf.summary.histogram(var.op.name, var)
         else:
             self._train_op = tf.no_op()
         return True
 
-    @staticmethod
-    def _variable_with_weight_decay(name, shape, initializer, reg_alpha, device):
-        """
-        It returns two variables.
-        1. A simple weight vector on CPU.
-        2. A variable which is used for regularization parameter
-        """
-        w = Model._variable_on_device(name, shape, initializer, device)
-        if device == 'cuda':
-            d = '/gpu:0'
-        else:
-            d = '/cpu:0'
-        with tf.device(d):
-            # If we want to use any regularisation for kernel weights
-            if reg_alpha > 0.0:
-                # This is l2 regularisation with hyperparam reg_alpha.
-                reg_loss = tf.multiply(tf.nn.l2_loss(w), reg_alpha, name='reg_loss')
-            # If we don't want to regularize the the CNN kernel weights
-            else:
-                reg_loss = tf.constant(0.0, dtype=tf.float32)
-
-        return w, reg_loss
-
-    @staticmethod
-    def _variable_on_device(name, shape, initializer, device='cuda'):
-        """
-        Declare a variable on CPU of `shape` and initialize
-        those with the `initializer`.
-        """
-        if device == 'cuda':
-            d = '/gpu:0'
-        else:
-            d = '/cpu:0'
-        with tf.device(d):
-            var = tf.get_variable(name, shape, initializer=initializer)
-        return var
-
     @property
     def train_op(self):
         return self._train_op
+    
+    @property
+    def total_loss(self):
+        return self._total_loss
+    
+    @property
+    def inputs(self):
+        return self._inputs
+    
+    @property
+    def labels(self):
+        return self._labels
+    
+    @property
+    def learning_rate(self):
+        return self._learning_rate
+
+    @property
+    def Wemb(self):
+        return self._Wemb
+
+    @property
+    def true_count_op(self):
+        return self._true_count_op
+            
+
+    def assign_lr(self, session, lr_value):
+        session.run(tf.assign(self._learning_rate, lr_value))
+    
     
 if __name__ == '__main__':
     m = Model(

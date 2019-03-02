@@ -4,6 +4,8 @@ import numpy as np
 from tqdm import tqdm
 from model import Model
 import tensorflow as tf
+import time
+from datetime import datetime
 
 class CNNText(BatchIterator):
     
@@ -57,6 +59,7 @@ class CNNText(BatchIterator):
         3. Pass the validation data for loss calculations
         4. Keep reporting the training and validation loss
         """
+        max_steps = self.batches * self.epochs
         with tf.Graph().as_default(): # In the scope of a tf session with default values
             
             # Create the computation graph for training
@@ -67,7 +70,7 @@ class CNNText(BatchIterator):
                     max_filter=5,
                     vocab_size=15000,
                     num_class=2,
-                    max_len=51,
+                    max_len=56,
                     l2_reg=1,
                     device='cpu')
 
@@ -79,7 +82,7 @@ class CNNText(BatchIterator):
                     max_filter=5,
                     vocab_size=15000,
                     num_class=2,
-                    max_len=51,
+                    max_len=56,
                     l2_reg=1,
                     device='cpu', 
                     subset='valid')
@@ -108,37 +111,90 @@ class CNNText(BatchIterator):
                 # we need to use session varible and use `run` method in the
                 # session variable.
                 sess.run(tf.global_variables_initializer())
+                
+                current_lr = 0.01
+#                 lowest_loss_value = float("inf")
+                global_step = 0
+#                 step_loss_ascend = 0
 
+#                 all_epochs = tqdm(range(1, self.epochs+1), ascii=True)
+                def eval_once(mtest, sess):
+                    test_loss = 0.0
+                    test_accuracy = 0
+                    for _ in range(self.batches):
+                        x_batch, y_batch = self.next_valid_batch()
+                        # x_batch = np.array(x_batch)
+                        loss_value, true_count_value = sess.run([mtest.total_loss, mtest.true_count_op], 
+                            feed_dict={mtest.inputs: x_batch, mtest.labels: y_batch})
+                        test_loss += loss_value
+                        test_accuracy += true_count_value
+                    test_loss /= self.batches
+                    test_accuracy /= (1.0 * self.batches * self.batch_size)
+#                     data_loader.reset_pointer()
+                    return (test_loss, test_accuracy)
+                
                 for epoch in range(1, self.epochs+1):
-                    all_batches = tqdm(range(self.batches), ascii=True, desc=f'Epoch {epoch}')
-                    for i in all_batches:
+                    train_loss = 0.0
+                    true_count_total = 0
+                    for i in range(self.batches):
+                        # Assign a learning_rate
+                        m.assign_lr(sess, current_lr)
+                        global_step += 1
+                        start_time = time.time()
                         # Load the the batch from training data
                         xs, ys = self.next_train_batch()
                         # Pass the data for fitting
-                        
-                        # At every 20th step get the batch from validation data
+                        # Fitting the training data is rather simple.
+                        # To pass values from outside to the computation graph
+                        # to fit, we use someting called `feed_dict`. 
+                        # `feed_dict` would have variable reference and the value
+                        # that we want to pass into that variable.
 
+                        ## Creating the feed dict now.
+                        feed = {m.inputs: xs, m.labels: ys}
+                        
+                        ## Pass the feed_dict into the session and run it.
+                        _, loss, tp = sess.run(
+                            [m.train_op, m.total_loss, m.true_count_op], 
+                            feed_dict=feed)
+                        
+                        duration = time.time() - start_time
+                        
+                        train_loss += loss
+                        true_count_total += tp
+                        
+                        if global_step % 200 == 0:
+                            summary_str = sess.run(summary)
+                            summary_writer.add_summary(summary_str, global_step)
+                            
+                        if global_step % 10 == 0:
+                            examples_per_sec = 50 / duration
+
+                            format_str = ('step %d/%d (epoch %d/%d), loss = %.6f (%.1f examples/sec; %.3f sec/batch), lr: %.6f')
+                            print (format_str % (global_step, max_steps, epoch, self.epochs, loss, 
+                                examples_per_sec, duration, current_lr))
+#                         if loss < lowest_loss_value:
+#                             lowest_loss_value = loss
+#                             step_loss_ascend = 0
+#                         else:
+#                             step_loss_ascend += 1
+                        
+                        
+#                         if step_loss_ascend >= 500:
+#                             current_lr *= 0.95
+                        
+#                         if current_lr < 1e-5: break
+                
+                        # At every 10th step get the batch from validation data
+                        
                         # Pass the data for loss calculations
 
                         # Keep reporting the training and validation loss
-                        all_batches.set_postfix({
-                            "train_loss": 0.1 * (epoch + i),
-                            "valid_loss": 0.1 * (epoch + i)
-                        })
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                
+                    train_loss /= self.batches
+                    train_accuracy = true_count_total * 1.0 / (self.batches * self.batch_size)
+                    print("Epoch %d: training_loss = %.6f, training_accuracy = %.3f" % (epoch, train_loss, train_accuracy))
+                    test_loss, test_accuracy = eval_once(mtest, sess)
+                    print("Epoch %d: test_loss = %.6f, test_accuracy = %.3f" % (epoch, test_loss, test_accuracy))
+#                     print(train_loss)
+#                     print(train_accuracy)

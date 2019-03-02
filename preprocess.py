@@ -6,6 +6,8 @@ from tqdm import tqdm
 from sklearn.externals import joblib
 from nltk.tokenize import word_tokenize
 
+UNK_TOKEN = '<unk>'
+PAD_TOKEN = '<pad>'
 
 class TextReader:
     """
@@ -30,18 +32,32 @@ class TextReader:
             else:
                 self.data_files[os.path.join(data_dir, file)] = label
     
-    def clean_text(self, text, stopwords):
+    def clean_text(self, string, stopwords):
         """
         Cleaning the text
         """
-        text = " ".join(filter(lambda x: all([x.isalpha(), x not in stopwords]), 
-                               word_tokenize(text)))
-        return text.strip().lower()
+        string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)     
+        string = re.sub(r"\'s", " \'s", string) 
+        string = re.sub(r"\'ve", " \'ve", string) 
+        string = re.sub(r"n\'t", " n\'t", string) 
+        string = re.sub(r"\'re", " \'re", string) 
+        string = re.sub(r"\'d", " \'d", string) 
+        string = re.sub(r"\'ll", " \'ll", string) 
+        string = re.sub(r",", " , ", string) 
+        string = re.sub(r"!", " ! ", string) 
+        string = re.sub(r"\(", " \( ", string) 
+        string = re.sub(r"\)", " \) ", string) 
+        string = re.sub(r"\?", " \? ", string) 
+        string = re.sub(r"\s{2,}", " ", string)
+        # text = " ".join(filter(lambda x: all([x.isalpha(), x not in stopwords]), 
+        #                        word_tokenize(text)))
+        # return text.strip().lower()
+        return string.strip().lower()
     
     def prepare_data(self, clean=True, **kwargs):
         all_words = []
         for file_path, class_label in self.data_files.items():
-            lines = []
+            # lines = []
             with open(file_path, 'r', encoding='latin-1') as infile:
                 for line in infile:
                     if not clean:
@@ -50,7 +66,7 @@ class TextReader:
                         stopwords = kwargs.get('stopwords', [])
                         cleaned_line = self.clean_text(line, stopwords)
 
-                    lines.append(cleaned_line)
+                    # lines.append(cleaned_line)
                     tokens = cleaned_line.split()
                     self.max_text_length = max(self.max_text_length, len(tokens))
                     all_words.extend(tokens)
@@ -60,16 +76,19 @@ class TextReader:
         return self.store_ranking(kwargs.get('max_vocab'))
     
     def store_ranking(self, max_vocab=None):
-        ranks = [*map(lambda x: x[0], self.word_fequency.most_common(max_vocab))]
-        np.save(os.path.join(self.path, 'ranks'), ranks)
+        ranks = [*map(lambda x: x[0], self.word_fequency.most_common(max_vocab - 2))]
+        ranks.insert(0, PAD_TOKEN)
+        ranks.insert(0, UNK_TOKEN)
+        joblib.dump(ranks, os.path.join(self.path, 'ranks'))
+        # np.save(os.path.join(self.path, 'ranks'), ranks)
         return True
     
     def get_rank(self, token):
         if self.ranks is None:
-            self.ranks = np.load(os.path.join(self.path, 'ranks.npy'))
+            self.ranks = joblib.load(os.path.join(self.path, 'ranks'))
         try:
-            return int(np.where(self.ranks == token)[0][0]) + 1
-        except IndexError:
+            return self.ranks.index(token)
+        except ValueError:
             return 0
             
     def get_ranked_features(self, shuffle=True):
@@ -84,7 +103,7 @@ class TextReader:
                 pad_left = (self.max_text_length - len(tokens)) // 2
                 pad_right = int(np.ceil((self.max_text_length - len(tokens)) / 2.0))
                 ranks = np.pad(ranks, pad_width=(pad_left, pad_right), 
-                               mode='constant', constant_values=(-1, -1))
+                               mode='constant', constant_values=(1, 1))
                 y.append(label)
                 X.append(ranks)
         X = np.array(X, dtype=int)

@@ -79,6 +79,8 @@ class TextReader:
         ranks = [*map(lambda x: x[0], self.word_fequency.most_common(max_vocab - 2))]
         ranks.insert(0, PAD_TOKEN)
         ranks.insert(0, UNK_TOKEN)
+#         if not os.path.exists(os.path.join(self.path, 'data')):
+#             os.makedirs(directory)
         joblib.dump(ranks, os.path.join(self.path, 'ranks'))
         # np.save(os.path.join(self.path, 'ranks'), ranks)
         return True

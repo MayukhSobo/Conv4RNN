@@ -36,23 +36,22 @@ class TextReader:
         """
         Cleaning the text
         """
-        # text = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", text)     
-        # text = re.sub(r"\'s", " \'s", text) 
-        # text = re.sub(r"\'ve", " \'ve", text) 
-        # text = re.sub(r"n\'t", " n\'t", text) 
-        # text = re.sub(r"\'re", " \'re", text) 
-        # text = re.sub(r"\'d", " \'d", text) 
-        # text = re.sub(r"\'ll", " \'ll", text) 
-        # text = re.sub(r",", " , ", text) 
-        # text = re.sub(r"!", " ! ", text) 
-        # text = re.sub(r"\(", " \( ", text) 
-        # text = re.sub(r"\)", " \) ", text) 
-        # text = re.sub(r"\?", " \? ", text) 
-        # text = re.sub(r"\s{2,}", " ", text)
-        text = " ".join(filter(lambda x: all([x.isalpha(), x not in stopwords]), 
-                               word_tokenize(text)))
+#         text = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", text)     
+#         text = re.sub(r"\'s", " \'s", text) 
+#         text = re.sub(r"\'ve", " \'ve", text) 
+#         text = re.sub(r"n\'t", " n\'t", text) 
+#         text = re.sub(r"\'re", " \'re", text) 
+#         text = re.sub(r"\'d", " \'d", text) 
+#         text = re.sub(r"\'ll", " \'ll", text) 
+#         text = re.sub(r",", " , ", text) 
+#         text = re.sub(r"!", " ! ", text) 
+#         text = re.sub(r"\(", " \( ", text) 
+#         text = re.sub(r"\)", " \) ", text) 
+#         text = re.sub(r"\?", " \? ", text) 
+#         text = re.sub(r"\s{2,}", " ", text)
+        text = [x for x in word_tokenize(text) if x not in stopwords]
+        text = " ".join(text)
         return text.strip().lower()
-        # return string.strip().lower()
     
     def prepare_data(self, clean=True, **kwargs):
         all_words = []

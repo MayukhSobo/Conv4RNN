@@ -9,14 +9,14 @@ from datetime import datetime
 
 class CNNText(BatchIterator):
     
-    def __init__(self, train_path, valid_path, epochs, batch_size, **kwargs):
+    def __init__(self, config, train_path, valid_path, **kwargs):
         X_train_name = kwargs.get('train_name', 'X_train')
         y_train_name = kwargs.get('train_name_y', 'y_train')
         
         X_validation_name = kwargs.get('validation_name', 'X_valid')
         y_validation_name = kwargs.get('validation_name_y', 'y_valid')
         
-        fmt = kwargs.get('format', 'npy')
+        fmt = kwargs.get('fmt', 'npy')
         
         X_train_path = os.path.join(train_path, X_train_name + '.' + fmt)
         y_train_path = os.path.join(train_path, y_train_name + '.' + fmt)
@@ -24,27 +24,49 @@ class CNNText(BatchIterator):
         X_validation_path = os.path.join(valid_path, X_validation_name + '.' + fmt)
         y_validation_path = os.path.join(valid_path, y_validation_name + '.' + fmt)
         
+#         print(train_path)
+#         print(valid_path)
+        
         if os.path.exists(X_train_path) and os.path.isfile(X_train_path):
             X_train = np.load(X_train_path)
         else:
-            X_train = None
+            raise ValueError("X_train can not be loaded")
+#             X_train = None
 
         if os.path.exists(X_validation_path) and os.path.isfile(X_validation_path):
             X_valid = np.load(X_validation_path)
         else:
-            X_valid = None
+            raise ValueError("X_valid can not be loaded")
+#             X_valid = None
             
         if os.path.exists(y_train_path) and os.path.isfile(y_train_path):
             y_train = np.load(y_train_path)
         else:
-            y_train = None
+            raise ValueError("y_train can not be loaded")
+#             y_train = None
         
         if os.path.exists(y_validation_path) and os.path.isfile(y_validation_path):
             y_valid = np.load(y_validation_path)
         else:
-            y_valid = None
-
-        super(self.__class__, self).__init__(X_train, y_train, X_valid, y_valid, epochs, batch_size)
+            raise ValueError("y_valid can not be loaded")
+#             y_valid = None
+        
+        self.nkernels = config['arch']['cnn']['units']
+        self.min_filter = config['arch']['cnn']['min_filter']
+        self.max_filter = config['arch']['cnn']['max_filter']
+        self.l2_reg = config['arch']['cnn']['kernel_l2_reg']
+        self.device = config['arch']['fit']['device'].lower()
+        self.vocab_size = config['arch']['data']['vocab_size']
+        self.embd_size = config['arch']['data']['embedding']
+        self.optimizer = config['arch']['fit']['optimizer']
+        self.dropout = config['arch']['layers']['dropout']
+        
+        self.learning_rate = config['arch']['fit']['learning_rate']
+        self.backend = config['arch']['fit']['backend']
+        epochs = config['arch']['fit']['epochs']
+        self.batch_size = config['arch']['fit']['batch_size']
+        
+        super(self.__class__, self).__init__(X_train, y_train, X_valid, y_valid, epochs, self.batch_size)
         
         ## 
     
@@ -52,7 +74,7 @@ class CNNText(BatchIterator):
     def _train_tf(self, logdir, tolerance):
         pass
     
-    def train(self, tolerance, logdir, backend='tensorflow'):
+    def train(self, logdir):
         """
         1. Load the the batch from training data
         2. At every 20th step get the batch from validation data
@@ -60,31 +82,41 @@ class CNNText(BatchIterator):
         4. Keep reporting the training and validation loss
         """
         max_steps = self.batches * self.epochs
+        
+        
         with tf.Graph().as_default(): # In the scope of a tf session with default values
             
             # Create the computation graph for training
             with tf.variable_scope('cnn', reuse=None):
                 m = Model(
-                    nkernels=100,
-                    min_filter=3,
-                    max_filter=5,
-                    vocab_size=15000,
+                    nkernels=self.nkernels,
+                    min_filter=self.min_filter,
+                    max_filter=self.max_filter,
+                    vocab_size=self.vocab_size,
                     num_class=2,
-                    max_len=56,
-                    l2_reg=1,
-                    device='cpu')
+                    max_len=self.max_len,
+                    l2_reg=self.l2_reg,
+                    esize=self.embd_size,
+                    bsize=self.batch_size,
+                    optim=self.optimizer,
+                    dropout=self.dropout,
+                    device=self.device)
 
             # Create the computaion graph for validation
             with tf.variable_scope('cnn', reuse=True):
                 mtest = Model(
-                    nkernels=100,
-                    min_filter=3,
-                    max_filter=5,
-                    vocab_size=15000,
+                    nkernels=self.nkernels,
+                    min_filter=self.min_filter,
+                    max_filter=self.max_filter,
+                    vocab_size=self.vocab_size,
                     num_class=2,
-                    max_len=56,
-                    l2_reg=1,
-                    device='cpu', 
+                    max_len=self.max_len,
+                    l2_reg=self.l2_reg,
+                    esize=self.embd_size,
+                    bsize=self.batch_size,
+                    optim=self.optimizer,
+                    dropout=self.dropout,
+                    device=self.device, 
                     subset='valid')
 
             # Create a saver to save the graph variables for later
@@ -112,7 +144,7 @@ class CNNText(BatchIterator):
                 # session variable.
                 sess.run(tf.global_variables_initializer())
                 
-                current_lr = 0.01
+                current_lr = self.learning_rate
 #                 lowest_loss_value = float("inf")
                 global_step = 0
 #                 step_loss_ascend = 0

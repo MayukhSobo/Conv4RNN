@@ -15,7 +15,9 @@ class BatchIterator(ABC):
 
         self.N_train = self.X_train.shape[0]
         self.N_valid = self.X_valid.shape[0]
-
+        
+        assert(self.X_train.shape[1] == self.X_valid.shape[1])
+        self.max_len = self.X_train.shape[1]
         self.epochs = epochs
         self.batch_size = batch_size
         self.batches = self.N_train // self.batch_size

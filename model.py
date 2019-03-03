@@ -66,7 +66,7 @@ class Model:
     """
     def __init__(self, nkernels, min_filter, max_filter,
                  vocab_size, num_class, max_len, l2_reg,
-                 subset='train', esize=300, bsize=50, **kwargs):
+                 esize, bsize, optim, dropout, device, subset='train'):
 
         self.is_train = subset == 'train'
         self.emb_size = esize
@@ -82,10 +82,10 @@ class Model:
         self.dropout_rate = 0
 
         if self.is_train:
-            self.optimizer = kwargs.get('optim', 'adagrad')
-            self.dropout_rate = kwargs.get('dropout', 0.5)
+            self.optimizer = optim
+            self.dropout_rate = dropout
         
-        self.device = kwargs.get('device', 'cuda')
+        self.device = device
 
         self._build_graph()
 

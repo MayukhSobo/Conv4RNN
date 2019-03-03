@@ -127,7 +127,11 @@ class CNNText(BatchIterator):
 
             # Now declare the path where model checkpoints are to be stored
             save_path = os.path.join(logdir, 'model.ckpt')
+            loss_var = tf.Variable(0.0)
+            writer_val = tf.summary.FileWriter(os.path.join(logdir, 'plot_val'))
+            writer_train = tf.summary.FileWriter(os.path.join(logdir, 'plot_train'))
 
+            tf.summary.scalar("loss", loss_var)
             # Object to merge all the summaries to report
             summary = tf.summary.merge_all()
             
@@ -196,7 +200,8 @@ class CNNText(BatchIterator):
                         _, loss, tp = sess.run(
                             [m.train_op, m.total_loss, m.true_count_op], 
                             feed_dict=feed)
-                        
+                        # print(type(z))
+                        # print(z)
                         duration = time.time() - start_time
                         
                         train_loss += loss
@@ -235,5 +240,19 @@ class CNNText(BatchIterator):
                     print("Epoch %d: training_loss = %.6f, training_accuracy = %.3f" % (epoch, train_loss, train_accuracy))
                     test_loss, test_accuracy = eval_once(mtest, sess)
                     print("Epoch %d: test_loss = %.6f, test_accuracy = %.3f" % (epoch, test_loss, test_accuracy))
+                    # Save the model at the end of Epoch
+
+                    summary_str = sess.run(summary, {loss_var: train_loss})
+                    writer_train.add_summary(summary_str, global_step)
+                    writer_train.flush()
+
+                    summary_str = sess.run(summary, {loss_var: test_loss})
+                    writer_val.add_summary(summary_str, global_step)
+                    writer_val.flush()
+
+                    # summary_writer.add_summary(summary_str, global_step)
+                    filename = saver.save(sess, save_path)
+                    print("Model saved in file: %s" % filename)
+                    
 #                     print(train_loss)
 #                     print(train_accuracy)

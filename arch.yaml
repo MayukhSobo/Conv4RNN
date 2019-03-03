@@ -8,7 +8,7 @@ arch:
     units:         100         # Number of convNets in each layers
     min_filter:    3           # Minimum size of the filter
     max_filter:    5           # Maximum size of the filter
-    kernel_l2_reg: 1           # L2 regularisation for each kernel in conv layer
+    kernel_l2_reg: 0           # L2 regularisation for each kernel in conv layer
   
   layers:
     dropout:       0.5         # Dropout rate in the layer
@@ -27,7 +27,7 @@ arch:
     embedding:     300         # Size of the embedding output
   
   initialisation:
-    embedding:     False        # Use pretrained embedding for initialisation
+    embedding:     True        # Use pretrained embedding for initialisation
     bin_path:      ../GoogleNews-vectors-negative300.bin
     
 #   logging:

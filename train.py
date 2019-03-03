@@ -65,6 +65,8 @@ class CNNText(BatchIterator):
         self.backend = config['arch']['fit']['backend']
         epochs = config['arch']['fit']['epochs']
         self.batch_size = config['arch']['fit']['batch_size']
+        self.root = config['arch']['data']['root_path']
+        self.pretrained_init = config['arch']['initialisation']['embedding']
         
         super(self.__class__, self).__init__(X_train, y_train, X_valid, y_valid, epochs, self.batch_size)
         
@@ -148,6 +150,11 @@ class CNNText(BatchIterator):
 #                 lowest_loss_value = float("inf")
                 global_step = 0
 #                 step_loss_ascend = 0
+                
+                if self.pretrained_init:
+                    print('Initializing the embedding layer with pretrained vectors')
+                    init = np.load(os.path.join(self.root, 'rank_matrix.npy'))
+                    m.assign_embedding(sess, init)
 
 #                 all_epochs = tqdm(range(1, self.epochs+1), ascii=True)
                 def eval_once(mtest, sess):

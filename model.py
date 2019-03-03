@@ -314,7 +314,9 @@ class Model:
     def assign_lr(self, session, lr_value):
         session.run(tf.assign(self._learning_rate, lr_value))
     
-    
+    def assign_embedding(self, session, pretrained):
+        session.run(tf.assign(self.Wemb, pretrained))
+
 if __name__ == '__main__':
     m = Model(
         nkernels=100,

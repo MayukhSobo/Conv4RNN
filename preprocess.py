@@ -26,8 +26,7 @@ class TextReader:
         self.X = None
         self.y = None
         for file, label in suffix_labels.items():
-            if not os.path.exists(os.path.join(data_dir, file)) or not \
-            os.path.isfile(os.path.join(data_dir, file)):
+            if not os.path.isfile(os.path.join(data_dir, file)):
                 raise IOError(f'Data files are not found in {data_dir}')
             else:
                 self.data_files[os.path.join(data_dir, file)] = label
@@ -36,21 +35,21 @@ class TextReader:
         """
         Cleaning the text
         """
-#         text = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", text)     
-#         text = re.sub(r"\'s", " \'s", text) 
-#         text = re.sub(r"\'ve", " \'ve", text) 
-#         text = re.sub(r"n\'t", " n\'t", text) 
-#         text = re.sub(r"\'re", " \'re", text) 
-#         text = re.sub(r"\'d", " \'d", text) 
-#         text = re.sub(r"\'ll", " \'ll", text) 
-#         text = re.sub(r",", " , ", text) 
-#         text = re.sub(r"!", " ! ", text) 
-#         text = re.sub(r"\(", " \( ", text) 
-#         text = re.sub(r"\)", " \) ", text) 
-#         text = re.sub(r"\?", " \? ", text) 
-#         text = re.sub(r"\s{2,}", " ", text)
-        text = [x for x in word_tokenize(text) if x not in stopwords]
-        text = " ".join(text)
+        text = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", text)     
+        text = re.sub(r"\'s", " \'s", text) 
+        text = re.sub(r"\'ve", " \'ve", text) 
+        text = re.sub(r"n\'t", " n\'t", text) 
+        text = re.sub(r"\'re", " \'re", text) 
+        text = re.sub(r"\'d", " \'d", text) 
+        text = re.sub(r"\'ll", " \'ll", text) 
+        text = re.sub(r",", " , ", text) 
+        text = re.sub(r"!", " ! ", text) 
+        text = re.sub(r"\(", " \( ", text) 
+        text = re.sub(r"\)", " \) ", text) 
+        text = re.sub(r"\?", " \? ", text) 
+        text = re.sub(r"\s{2,}", " ", text)
+#         text = [x for x in word_tokenize(text) if x not in stopwords]
+#         text = " ".join(text)
         return text.strip().lower()
     
     def prepare_data(self, clean=True, **kwargs):
@@ -118,13 +117,28 @@ class TextReader:
             np.random.shuffle(data)
         return data[:, :-1], data[:, -1]
     
-    def get_embedding_vector(self, model):
-        """
-        Get the embedding vector from the Gensim model.
-        We can use pretrained word vectors like Google News.
-        """
-        for word in self.word_fequency:
+def get_embedding_vector(config, rankfile):
+    """
+    Get the embedding vector from the Gensim model.
+    We can use pretrained word vectors like Google News.
+    """
+    from gensim.models import KeyedVectors
+    from pyemd import emd
+    ranks = joblib.load(rankfile)
+    vocab_size = config["arch"]["data"]["vocab_size"]
+    emb_size = config["arch"]["data"]["embedding"]
+    bin_path = config["arch"]["initialisation"]["bin_path"]
+    rank_matrix = np.zeros((vocab_size, emb_size))
+    if vocab_size != len(ranks):
+        raise RuntimeError(f'Length of the rank vocabulary({len(ranks)}) != vocab size({vocab_size})')
+    else:
+        print('Loading the pretrained word vector binary')
+        model = KeyedVectors.load_word2vec_format(bin_path, binary=True)
+        for idx, word in tqdm(enumerate(ranks), total=vocab_size):
             if model.__contains__(word):
-                yield word, model[word]
+                rank_matrix[idx: ] = model[word]
             else:
-                yield word, np.random.uniform(-0.25, 0.25, model.vector_size)
+                rank_matrix[idx: ] = np.random.uniform(-0.25, 0.25, model.vector_size)
+        path = os.path.dirname(rankfile)
+        np.save(os.path.join(path, 'rank_matrix'), rank_matrix)
+        print(f'Saved pretrained rank matrix at {path} of shape {rank_matrix.shape}')

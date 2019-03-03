@@ -1,6 +1,7 @@
 import click
 import os
 import numpy as np
+from sklearn.externals import joblib
 import yaml
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -102,10 +103,16 @@ def _buildVocabulary(base_path, clean, max_vocab, shuffle, test_size):
     '--path',
     required=True,
     type=click.Path(exists=True),
-    help="Path of the pretrained word vector"
+    help="Path of the ranked vocabulary file"
 )
-def buildWord2Vec():
-    pass
+@click.pass_context
+def buildWord2Vec(ctx, path):
+    from preprocess import get_embedding_vector
+    if not os.path.isfile(os.path.join(path, 'ranks')):
+        raise IOError('Ranked vocabulary file not found')
+    config = ctx.obj['CONF']
+    get_embedding_vector(config, os.path.join(path, 'ranks'))
+        
 
 @main.command()
 @click.option(

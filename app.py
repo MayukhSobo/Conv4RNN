@@ -78,7 +78,7 @@ def _buildVocabulary(base_path, clean, max_vocab, shuffle, test_size):
                     suffix_labels=suffix)
     print(f'Found datafiles with the following class labels {tr.data_files}')
     if tr.prepare_data(clean=clean, max_vocab=max_vocab):
-        X, y = tr.get_ranked_features(shuffle=shuffle)
+        X, y = tr.get_ranked_features()
     print(f'Created training data of shape {X.shape}')
     print(f'Created training label of shape {y.shape}')
     if not os.path.exists(os.path.join(base_path, 'train')):
@@ -87,7 +87,7 @@ def _buildVocabulary(base_path, clean, max_vocab, shuffle, test_size):
     if not os.path.exists(os.path.join(base_path, 'valid')):
         os.mkdir(os.path.join(base_path, 'valid'))
     X_train, X_valid, y_train, y_valid = train_test_split(
-        X, y, test_size=test_size, random_state=42)
+        X, y, test_size=test_size, random_state=42, shuffle=shuffle)
     np.save(os.path.join(base_path, 'train', 'X_train'), X_train)
     np.save(os.path.join(base_path, 'train', 'y_train'), y_train)
 

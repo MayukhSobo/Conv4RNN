@@ -317,15 +317,15 @@ class Model:
     def assign_embedding(self, session, pretrained):
         session.run(tf.assign(self.Wemb, pretrained))
 
-if __name__ == '__main__':
-    m = Model(
-        nkernels=100,
-        min_filter=3,
-        max_filter=5,
-        vocab_size=15000,
-        num_class=2,
-        max_len=51,
-        l2_reg=1,
-        device='cpu'
-    )
-    print(m.train_op)
+# if __name__ == '__main__':
+#     m = Model(
+#         nkernels=100,
+#         min_filter=3,
+#         max_filter=5,
+#         vocab_size=15000,
+#         num_class=2,
+#         max_len=51,
+#         l2_reg=1,
+#         device='cpu'
+#     )
+#     print(m.train_op)

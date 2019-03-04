@@ -24,32 +24,29 @@ class CNNText(BatchIterator):
         X_validation_path = os.path.join(valid_path, X_validation_name + '.' + fmt)
         y_validation_path = os.path.join(valid_path, y_validation_name + '.' + fmt)
         
-#         print(train_path)
-#         print(valid_path)
         
         if os.path.exists(X_train_path) and os.path.isfile(X_train_path):
             X_train = np.load(X_train_path)
         else:
             raise ValueError("X_train can not be loaded")
-#             X_train = None
+
 
         if os.path.exists(X_validation_path) and os.path.isfile(X_validation_path):
             X_valid = np.load(X_validation_path)
         else:
             raise ValueError("X_valid can not be loaded")
-#             X_valid = None
+
             
         if os.path.exists(y_train_path) and os.path.isfile(y_train_path):
             y_train = np.load(y_train_path)
         else:
             raise ValueError("y_train can not be loaded")
-#             y_train = None
         
         if os.path.exists(y_validation_path) and os.path.isfile(y_validation_path):
             y_valid = np.load(y_validation_path)
         else:
             raise ValueError("y_valid can not be loaded")
-#             y_valid = None
+
         
         self.nkernels = config['arch']['cnn']['units']
         self.min_filter = config['arch']['cnn']['min_filter']
@@ -70,24 +67,9 @@ class CNNText(BatchIterator):
         
         super(self.__class__, self).__init__(X_train, y_train, X_valid, y_valid, epochs, self.batch_size)
         
-        ## 
-    
     @staticmethod
-    def _train_tf(self, logdir, tolerance):
-        pass
-    
-    def train(self, logdir):
-        """
-        1. Load the the batch from training data
-        2. At every 20th step get the batch from validation data
-        3. Pass the validation data for loss calculations
-        4. Keep reporting the training and validation loss
-        """
-        max_steps = self.batches * self.epochs
-        
-        
+    def _train_tf(self, logdir, max_steps):
         with tf.Graph().as_default(): # In the scope of a tf session with default values
-            
             # Create the computation graph for training
             with tf.variable_scope('cnn', reuse=None):
                 m = Model(
@@ -149,18 +131,11 @@ class CNNText(BatchIterator):
                 # we need to use session varible and use `run` method in the
                 # session variable.
                 sess.run(tf.global_variables_initializer())
-                
-                current_lr = self.learning_rate
-#                 lowest_loss_value = float("inf")
                 global_step = 0
-#                 step_loss_ascend = 0
-                
                 if self.pretrained_init:
                     print('Initializing the embedding layer with pretrained vectors')
                     init = np.load(os.path.join(self.root, 'rank_matrix.npy'))
                     m.assign_embedding(sess, init)
-
-#                 all_epochs = tqdm(range(1, self.epochs+1), ascii=True)
                 def eval_once(mtest, sess):
                     test_loss = 0.0
                     test_accuracy = 0
@@ -173,7 +148,6 @@ class CNNText(BatchIterator):
                         test_accuracy += true_count_value
                     test_loss /= self.batches
                     test_accuracy /= (1.0 * self.batches * self.batch_size)
-#                     data_loader.reset_pointer()
                     return (test_loss, test_accuracy)
                 
                 for epoch in range(1, self.epochs+1):
@@ -181,7 +155,7 @@ class CNNText(BatchIterator):
                     true_count_total = 0
                     for i in range(self.batches):
                         # Assign a learning_rate
-                        m.assign_lr(sess, current_lr)
+                        m.assign_lr(sess, self.learning_rate)
                         global_step += 1
                         start_time = time.time()
                         # Load the the batch from training data
@@ -217,42 +191,36 @@ class CNNText(BatchIterator):
                             format_str = ('step %d/%d (epoch %d/%d), loss = %.6f (%.1f examples/sec; %.3f sec/batch), lr: %.6f')
                             print (format_str % (global_step, max_steps, epoch, self.epochs, loss, 
                                 examples_per_sec, duration, current_lr))
-#                         if loss < lowest_loss_value:
-#                             lowest_loss_value = loss
-#                             step_loss_ascend = 0
-#                         else:
-#                             step_loss_ascend += 1
-                        
-                        
-#                         if step_loss_ascend >= 500:
-#                             current_lr *= 0.95
-                        
-#                         if current_lr < 1e-5: break
-                
-                        # At every 10th step get the batch from validation data
-                        
-                        # Pass the data for loss calculations
-
-                        # Keep reporting the training and validation loss
-
                     train_loss /= self.batches
                     train_accuracy = true_count_total * 1.0 / (self.batches * self.batch_size)
                     print("Epoch %d: training_loss = %.6f, training_accuracy = %.3f" % (epoch, train_loss, train_accuracy))
                     test_loss, test_accuracy = eval_once(mtest, sess)
                     print("Epoch %d: test_loss = %.6f, test_accuracy = %.3f" % (epoch, test_loss, test_accuracy))
-                    # Save the model at the end of Epoch
+                    
 
+                    # Write the training loss in the tensorboard
                     summary_str = sess.run(summary, {loss_var: train_loss})
                     writer_train.add_summary(summary_str, global_step)
                     writer_train.flush()
 
+                    # Write the validation loss in the tensorboard
                     summary_str = sess.run(summary, {loss_var: test_loss})
                     writer_val.add_summary(summary_str, global_step)
                     writer_val.flush()
 
-                    # summary_writer.add_summary(summary_str, global_step)
+                    # Save the model at the end of Epoch
                     filename = saver.save(sess, save_path)
                     print("Model saved in file: %s" % filename)
-                    
-#                     print(train_loss)
-#                     print(train_accuracy)
+    
+    def train(self, logdir):
+        """
+        1. Load the the batch from training data
+        2. At every 20th step get the batch from validation data
+        3. Pass the validation data for loss calculations
+        4. Keep reporting the training and validation loss
+        """
+        max_steps = self.batches * self.epochs
+        if self.backend.lower() == 'tensorflow':
+            CNNText._train_tf(logdir, max_steps)
+        
+        

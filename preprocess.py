@@ -35,21 +35,8 @@ class TextReader:
         """
         Cleaning the text
         """
-        text = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", text)     
-        text = re.sub(r"\'s", " \'s", text) 
-        text = re.sub(r"\'ve", " \'ve", text) 
-        text = re.sub(r"n\'t", " n\'t", text) 
-        text = re.sub(r"\'re", " \'re", text) 
-        text = re.sub(r"\'d", " \'d", text) 
-        text = re.sub(r"\'ll", " \'ll", text) 
-        text = re.sub(r",", " , ", text) 
-        text = re.sub(r"!", " ! ", text) 
-        text = re.sub(r"\(", " \( ", text) 
-        text = re.sub(r"\)", " \) ", text) 
-        text = re.sub(r"\?", " \? ", text) 
-        text = re.sub(r"\s{2,}", " ", text)
-#         text = [x for x in word_tokenize(text) if x not in stopwords]
-#         text = " ".join(text)
+        text = [x for x in word_tokenize(text) if x not in stopwords]
+        text = " ".join(text)
         return text.strip().lower()
     
     def prepare_data(self, clean=True, **kwargs):
@@ -92,7 +79,7 @@ class TextReader:
         except ValueError:
             return 0
             
-    def get_ranked_features(self, shuffle=True):
+    def get_ranked_features(self):
         if self.X is not None and self.y is not None:
             return self.X, self.y
         X = []
@@ -112,10 +99,7 @@ class TextReader:
                 X.append(ranks)
         X = np.array(X, dtype=int)
         y = np.array(y, dtype=int)
-        data = np.hstack((X, y.reshape(-1, 1)))
-        if shuffle:
-            np.random.shuffle(data)
-        return data[:, :-1], data[:, -1]
+        return X, y
     
 def get_embedding_vector(config, rankfile):
     """

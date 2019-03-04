@@ -1,6 +1,8 @@
 # Conv4RNN
 Sentence classification using Conv1d instead of LSTMs on Amazon Food Review Dataset
 
+# Medium Blog [Here](https://medium.com/@theDataGeek/cnn-for-rnns-a-gentle-approach-to-use-cnns-for-nlp-53ab80768d43?source=friends_link&sk=96de5a35150fdf3aa2d0863b0faaa3b3)
+
 
 # Command Line Options
 ```sh
